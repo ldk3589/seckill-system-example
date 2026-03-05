@@ -1,0 +1,75 @@
+### ========== 基础变量 ==========
+@host = http://localhost:8080
+@username = u12
+@password = 123456
+@productId = 1
+
+
+### ==========  注册 ==========
+POST {{host}}/api/auth/register
+Content-Type: application/json
+
+{
+  "username": "{{username}}",
+  "password": "{{password}}"
+}
+
+### ==========  登录（保存 token） ==========
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{
+  "username": "{{username}}",
+  "password": "{{password}}"
+}
+
+> {%
+    client.global.set("token", response.body.data.token);
+%}
+
+### ==========  预热库存到 Redis（压测前必须） ==========
+POST {{host}}/api/product/{{productId}}/warmup
+Authorization: Bearer {{token}}
+
+### ==========  查询商品（验证缓存链路） ==========
+GET {{host}}/api/product/{{productId}}
+Authorization: Bearer {{token}}
+
+### ==========  秒杀下单（返回 orderNo，并保存） ==========
+POST {{host}}/api/seckill/do
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "productId": {{productId}}
+}
+
+> {%
+    client.global.set("orderNo", response.body.data.orderNo);
+%}
+
+### ==========  查询订单状态（第一次一般是 ACCEPTED） ==========
+GET {{host}}/api/order/status/{{orderNo}}
+Authorization: Bearer {{token}}
+
+### ==========  订单状态轮询（手动多点几次，直到 SUCCESS） ==========
+GET {{host}}/api/order/status/{{orderNo}}
+Authorization: Bearer {{token}}
+
+### ========== 重复下单验证（应返回 409 请勿重复下单） ==========
+POST {{host}}/api/seckill/do
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "productId": {{productId}}
+}
+
+### ==========  限流验证（连续点多次，可能出现 429） ==========
+POST {{host}}/api/seckill/do
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "productId": {{productId}}
+}
