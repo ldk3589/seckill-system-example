@@ -1,6 +1,5 @@
 package com.dk.seckillsystemexample.service;
 
-
 import com.dk.seckillsystemexample.common.Constants;
 import com.dk.seckillsystemexample.repo.SeckillOrderRepo;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -34,12 +33,13 @@ public class OrderService {
         if ("SUCCESS".equals(status)) {
             return Map.of("orderNo", orderNo, "status", "SUCCESS");
         }
+
         if ("FAILED".equals(status)) {
             return Map.of("orderNo", orderNo, "status", "FAILED");
         }
+
         if ("ACCEPTED".equals(status)) {
-            // 进一步查 DB（防止 redis 状态丢失）
-            boolean existsInDb = orderRepo.findAll().stream().anyMatch(o -> orderNo.equals(o.getOrderNo()));
+            boolean existsInDb = orderRepo.findByOrderNo(orderNo).isPresent();
             if (existsInDb) {
                 redis.opsForValue().set(key, "SUCCESS", Duration.ofHours(1));
                 return Map.of("orderNo", orderNo, "status", "SUCCESS");
@@ -47,12 +47,12 @@ public class OrderService {
             return Map.of("orderNo", orderNo, "status", "ACCEPTED");
         }
 
-        // status 为空：可能过期了，查 DB 兜底
         boolean exists = orderRepo.findByOrderNo(orderNo).isPresent();
         if (exists) {
             redis.opsForValue().set(key, "SUCCESS", Duration.ofHours(1));
             return Map.of("orderNo", orderNo, "status", "SUCCESS");
         }
+
         return Map.of("orderNo", orderNo, "status", "UNKNOWN");
     }
 }
